@@ -274,8 +274,10 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
 
     price = f"${new_item['price']:.0f}"
     system = (
-        "You write short, casual social media captions about thrift finds. "
-        "Sound like a real person, not a product listing."
+        "You write short, casual social media captions for someone showing off "
+        "a thrift find they just bought. They are the buyer, not the seller — "
+        "never tell readers to buy it. Sound like a real person, not a "
+        "product listing."
     )
     prompt = (
         f"Write a caption for a post about this thrift find:\n"
@@ -284,7 +286,7 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
         "Rules:\n"
         "- 2 to 4 sentences, under 400 characters in total.\n"
         f"- Mention the item, the price written exactly as {price}, and the "
-        f"platform {new_item['platform']} — each once.\n"
+        f"platform {new_item['platform']} — each once, as where they found it.\n"
         "- Be specific about the vibe and pick one detail from the styling.\n"
         "- End with at most 3 hashtags.\n"
         "- Output only the caption."
