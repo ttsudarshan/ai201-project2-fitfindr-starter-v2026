@@ -281,31 +281,38 @@ Can't write a fit card: no outfit suggestion was given for Vintage Levi's 501 Je
 
 **Moment 1**
 
-- *What I asked for:* Claude Code wrote `create_fit_card` from my spec, and I
-  had it run the tool three times on the same item with the cache off to check
-  the cards vary.
-- *What came back:* three different captions, each with `$24` and `depop` in
-  them, but every one was written as the **seller**: "Grab it on depop for $24
-  before I change my mind." The prompt said "a post about this thrift find",
-  and the model took that as a sales listing.
-- *What I changed:* the system prompt now says the caption is from the person
-  who just bought the item, not the seller, and that it should never tell
-  readers to buy it. The platform is now mentioned "as where they found it".
-  The re-run cards read "Scored this 2003 tour graphic tee on depop for $24…".
-  <!-- TODO: put this in your own words -->
+- *What I asked for:* I had Claude Code build `create_fit_card` from my Tool
+  Inventory spec, then run it three times on the same item (the 2003 tour
+  graphic tee) with the cache off. I wanted to see whether the captions
+  actually varied.
+- *What came back:* three different captions, and all three included `$24`
+  and `depop`, so the spec was met on paper. But every one was written as
+  the seller: "Grab it on depop for $24 before I change my mind." My prompt
+  only said "a post about this thrift find", and the model read that as a
+  sales listing. Nobody posts their own thrift haul that way.
+- *What I changed:* I had the system prompt rewritten to say the caption is
+  from the person who just bought the item and should never tell readers to
+  buy it, and to mention the platform as where they found it. I re-ran the
+  same three tests. The cards now read "Scored this 2003 tour graphic tee on
+  depop for $24 and it's already my favorite shirt…". I also added "written as
+  the person who bought the item" to the `create_fit_card` spec, so the spec
+  and the code agree.
 
 **Moment 2**
 
 - *What I asked for:* a message for the empty-search branch that tells the
-  user what to change, not just "No results".
-- *What came back:* the first version only told the user to try different
-  words. For `'designer ballgown size XXS under $5'` that's half the story,
-  because nothing in the data costs $5 (the cheapest listing is $12), so
-  changing the words alone would still find nothing.
-- *What I changed:* the message now re-runs the search without the size, then
-  without the price, and says which filter is the problem. When the words
-  match nothing, it also says if the price is below the cheapest listing.
-  <!-- TODO: put this in your own words, and add anything you changed -->
+  user what to change, because the brief says "No results" doesn't count.
+- *What came back:* the first version only said to try different words. I
+  tested it with `'designer ballgown size XXS under $5'`, and that advice was
+  only half right: nothing in the data costs $5 (the cheapest listing is $12),
+  so new words alone would still find nothing.
+- *What I changed:* the message now re-runs the search without the size
+  filter, then without the price filter, and names whichever one is blocking
+  results ("drop the size XXS filter — there are matches in other sizes").
+  When the words match nothing at all, it also says if the price is below the
+  cheapest listing. I checked it on four impossible queries (`graphic tee
+  under $10`, `track jacket size XXS`, `denim jacket size XXS under $10`,
+  `ballgown`), and each one named a different fix.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
