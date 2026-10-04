@@ -25,9 +25,14 @@ Given a query that matches at least one listing, the agent completes all three
 tool calls and returns a fit card — in at least 4 of 5 tries.
 
 **Why this target:**
-<!-- Why 4 of 5 and not 5 of 5? Something about your search, probably —
-     "my search is a plain keyword match and some phrasings will miss" is a
-     real answer. -->
+`search_listings` is a plain keyword match on single words. A query that
+describes a listing in words the listing doesn't use ("tshirt" when the data
+says "tee", or "trainers" when it says "sneakers") can score 0 and end the run
+early even though a match exists. Also, two of the three steps call the model
+over the network, and one rate-limit failure or timeout in five runs is
+realistic on the free tier. 5 of 5 would assume both problems never happen.
+I didn't go lower than 4 because the example queries were checked against the
+data and use the same words the listings do.
 
 ---
 
@@ -37,66 +42,89 @@ Given a query that matches no listings, the agent stops before calling
 `suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
 
 **Why this target:**
-<!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
-     about this path? -->
+This path never touches the model. The query is parsed with regex, the search
+is a filter over a local file, and the branch is a plain `if not results`
+check. The same input gives the same output every time, so nothing random can
+excuse a miss. If it fails once, it'll fail every time, and that's a bug and
+not bad luck. "Names what to change" is checked by reading the message: it has
+to name at least one of the filters (the price, the size or the keywords) and
+say what to do with it. "No results found" alone fails.
 
 ---
 
-## 3. Something about state
+## 3. The item search found is the item the later tools received
 
-<!-- YOU WRITE THIS ONE.
-
-     How would you know that the item your search found is the same item the
-     next tool received? Name something countable or observable.
-
-     This is the criterion people find hardest, because state failure doesn't
-     look like state failure — it looks like a tool problem. Something that
-     compares session["selected_item"] against what actually reached
-     suggest_outfit is the shape you're after. -->
-
-
+For 5 different matching queries (the five non-empty queries from
+`python app.py examples`), every run satisfies all of the following, checked
+in the returned session: `session["selected_item"]["id"]` equals
+`session["search_results"][0]["id"]`, and it also equals the `id` of the
+`new_item` argument recorded in `session["tool_calls"]` for **both**
+`suggest_outfit` and `create_fit_card`. Also, the user's query text appears
+nowhere in either of those recorded arguments, because the item comes from
+state and not from the user retyping it. Target: 5 of 5 queries.
 
 **Why this target:**
-
-
+Passing the item along is my own code reading and writing a dict, with no model
+involved. Once it works it should work every time, so anything below 5 of 5
+would be accepting a known bug. I picked comparing `id`s at three points
+instead of reading the outfit text and judging "does this sound like the same
+item", because the model sometimes paraphrases a title, and that would make a
+state check depend on the model's wording.
 
 ---
 
-## 4. Something about the fit card
+---
 
-<!-- YOU WRITE THIS ONE.
+## 4. The fit card is postable, accurate and not a template
 
-     The fit card calls a model, so the same input can produce different words
-     each time. That's not a bug — it's the nature of the tool. So what would
-     make it acceptable?
-
-     Think about what you'd actually be unhappy to see. A caption that never
-     mentions the price? Two different items producing the same opening
-     sentence? A card longer than a caption anyone would post? Any of those can
-     be turned into a number. -->
-
-
+Run `'vintage graphic tee under $30'` 5 times with the cache off
+(`AI201_CACHE=0`). A run's card passes if it meets all three of these:
+(a) it's 400 characters or fewer, (b) it contains the selected item's price
+written as `$` followed by the whole-dollar amount (for example `$24`; `$24.00`
+also counts), and (c) it contains the selected item's `platform` name, ignoring
+case. Target: at least 4 of 5 cards pass. Also, none of the 5 cards may be
+word-for-word identical to another (5 of 5 distinct).
 
 **Why this target:**
-
-
+The model gets the price and platform in the prompt and is told to use them,
+but at temperature 0.9 it sometimes rewrites a price ("under 25 bucks") or
+leaves out the platform, so I expect the odd miss, and 5 of 5 on (a)–(c) would
+be a claim about the model I can't back up. I didn't go below 4 because the
+prompt asks for these exact things, so missing two out of five would mean the
+prompt isn't working. The "all 5 distinct" part is strict on purpose. If two
+cards come out identical, caching is on or the temperature is 0, and either
+one means the test isn't testing anything.
 
 ---
 
-## 5. Your choice
+---
 
-<!-- YOU WRITE THIS ONE TOO.
+## 5. The price ceiling and size the user typed are the ones actually applied
 
-     Pick something you actually care about getting right. Speed, the empty
-     wardrobe path, what happens when the model can't be reached, whether the
-     search respects a price ceiling — anything, as long as it names a number
-     or an observable outcome. -->
+For each of these 5 queries:
 
+| Query | Expected `max_price` | Expected `size` |
+|---|---|---|
+| `vintage graphic tee under $30` | 30.0 | None |
+| `90s track jacket in size M` | None | `M` |
+| `platform sneakers size 8` | None | `8` |
+| `denim jacket below 50 dollars` | 50.0 | None |
+| `knit cardigan, size M, max $40` | 40.0 | `M` |
 
+`session["parsed"]` holds exactly the expected `max_price` and `size`, **and**
+every listing in `session["search_results"]` has `price <= max_price` (when
+there is one) and a size that passes the size rule in the README's Tool
+Inventory (when there is one). Target: 5 of 5 queries.
 
 **Why this target:**
-
-
+A filter that's quietly ignored is the failure I'd be most annoyed by as a
+user: I say "under $30" and get shown a $45 jacket, with nothing telling me
+why. The starter even warns that PowerShell double quotes can eat `$30`. The
+parsing is regex and the filter is arithmetic, so there's no randomness to
+allow for, and a miss on any of these five phrasings is a real bug. I picked
+five different ways of writing a price and a size ("under $", "below …
+dollars", "max $", "in size", ", size X,") so the target can't be met by a
+parser that only handles the one phrasing in the examples.
 
 ---
 
