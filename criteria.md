@@ -24,6 +24,11 @@ data earns credit; *"80% seemed reasonable"* does not.
 Given a query that matches at least one listing, the agent completes all three
 tool calls and returns a fit card — in at least 4 of 5 tries.
 
+*How it's checked:* a try passes when `session["error"]` is `None`,
+`session["tool_calls"]` lists `search_listings`, `suggest_outfit`,
+`create_fit_card` in that order, and `session["fit_card"]` is a non-empty
+string. Tested with `'vintage graphic tee under $30'`.
+
 **Why this target:**
 `search_listings` is a plain keyword match on single words. A query that
 describes a listing in words the listing doesn't use ("tshirt" when the data
@@ -40,6 +45,12 @@ data and use the same words the listings do.
 
 Given a query that matches no listings, the agent stops before calling
 `suggest_outfit` and returns a message naming what to change — 5 of 5 tries.
+
+*How it's checked:* a try passes when `session["tool_calls"]` holds only
+`search_listings`, `session["outfit_suggestion"]` and `session["fit_card"]` are
+both `None`, and `session["error"]` names at least one of the size, the price
+or the words used and says what to do about it. Tested with
+`'designer ballgown size XXS under $5'`.
 
 **Why this target:**
 This path never touches the model. The query is parsed with regex, the search
@@ -79,7 +90,7 @@ state check depend on the model's wording.
 
 Run `'vintage graphic tee under $30'` 5 times with the cache off
 (`AI201_CACHE=0`). A run's card passes if it meets all three of these:
-(a) it's 400 characters or fewer, (b) it contains the selected item's price
+(a) the whole card, hashtags included, is 400 characters or fewer, (b) it contains the selected item's price
 written as `$` followed by the whole-dollar amount (for example `$24`; `$24.00`
 also counts), and (c) it contains the selected item's `platform` name, ignoring
 case. Target: at least 4 of 5 cards pass. Also, none of the 5 cards may be
