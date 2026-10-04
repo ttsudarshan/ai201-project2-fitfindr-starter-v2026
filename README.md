@@ -41,6 +41,14 @@
 
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
 
+You type what you're thrifting for in plain language, like
+`python app.py ask 'vintage graphic tee under $30, size M'`. FitFindr pulls the
+description, size and price ceiling out of that, searches 40 listings from
+Depop, thredUp and Poshmark, and picks the best match. It then suggests two
+outfits that pair the find with pieces already in your wardrobe, and writes a
+short caption you could post with it. If nothing matches, it stops before the
+outfit step and tells you which part of your request to change: the size, the
+price, or the words you used.
 
 
 ---
@@ -114,8 +122,8 @@ Every listing in `data/listings.json` has these fields: `id`, `title`,
   taken from `session["selected_item"]`.
 - **Returns:** a `str` caption of 2 to 4 sentences and under 400 characters.
   It names the item, says its price as `$NN` and its platform once each, and
-  ends with up to 3 hashtags. If the listing has no brand, the brand isn't
-  mentioned.
+  ends with up to 3 hashtags. It's written as the person who bought the item,
+  not a seller. If the listing has no brand, the brand isn't mentioned.
 - **When it has nothing:** if `outfit` is empty or only whitespace, it returns
   `"Can't write a fit card: no outfit suggestion was given for <title>."`
   without calling the model. The loop never calls it that way, because it
@@ -166,28 +174,98 @@ is the same one in `selected_item`.
      1. One FULL query and its output, pasted as text.
      2. Your three per-tool terminal tests — the command and what it printed. -->
 
-**One full query**
+**One full query** (happy path, example wardrobe)
 
 ```
-$ python app.py ask '...'
+$ python app.py ask 'vintage graphic tee under $30, size M'
 
+
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Outfit:   Outfit 1: Y2K Butterfly Tee, Baggy straight-leg jeans, Chunky white sneakers
+Why it works: Balances the fitted crop top with loose denim for an authentic 2000s streetwear silhouette.
+
+Outfit 2: Y2K Butterfly Tee, Wide-leg khaki trousers, Brown leather belt
+Why it works: Anchors the pastel graphic tee with earthy neutrals for a grounded, everyday look.
+
+  Fit card: Scored this adorable Y2K butterfly tee on depop for just $18! Obsessed with the pastel print, especially paired with baggy jeans for that ultimate early 2000s streetwear vibe. Can't wait to live in this all summer. 
+
+#y2k #thrifthaul #babytee
+
+2 model calls this session, 732 prompt + 156 output tokens
+```
+
+**The same agent on a query nothing matches** (the branch: it stops after
+`search_listings`, makes no model calls, and `fit_card` stays `None`)
+
+```
+$ python app.py ask 'designer ballgown size XXS under $5'
+
+  Nothing matched 'designer ballgown' in size XXS under $5. Try: describe the item differently, since no listing mentions 'designer ballgown' (a type of clothing like tee, jeans, jacket, dress or sneakers, or a style like vintage, y2k, 90s or grunge); and raise your price: the cheapest listing is $12.
+
+0 model calls this session
+```
+
+**Checking the state:** for each matching example query, the `id` of the first
+search result, `selected_item`, and the `new_item` each later tool was called
+with (from `session["tool_calls"]`):
+
+```
+vintage graphic tee under $30 | lst_033 lst_033 lst_033 lst_033 | fit_card: True ['search_listings', 'suggest_outfit', 'create_fit_card']
+90s track jacket in size M | lst_004 lst_004 lst_004 lst_004 | fit_card: True ['search_listings', 'suggest_outfit', 'create_fit_card']
+silk slip dress in midi length under $40 | lst_013 lst_013 lst_013 lst_013 | fit_card: True ['search_listings', 'suggest_outfit', 'create_fit_card']
+platform sneakers size 8 | lst_019 lst_019 lst_019 lst_019 | fit_card: True ['search_listings', 'suggest_outfit', 'create_fit_card']
+denim jacket under $50 | lst_007 lst_007 lst_007 lst_007 | fit_card: True ['search_listings', 'suggest_outfit', 'create_fit_card']
 ```
 
 **The three tools, tested one at a time**
 
 ```
 $ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
+[{'id': 'lst_006', 'title': 'Graphic Tee — 2003 Tour Bootleg Style', 'description': 'Vintage-style bootleg tee with faded graphic. Slightly boxy fit. 100% cotton, soft and worn-in.', 'category': 'tops', 'style_tags': ['graphic tee', 'vintage', 'grunge', 'streetwear', 'band tee'], 'size': 'L', 'condition': 'good', 'price': 24.0, 'colors': ['black'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_002', 'title': 'Y2K Baby Tee — Butterfly Print', 'description': 'Super cute early 2000s baby tee with butterfly graphic. Fitted crop length. Tag says medium but fits like a small.', 'category': 'tops', 'style_tags': ['y2k', 'vintage', 'graphic tee', 'cottagecore'], 'size': 'S/M', 'condition': 'excellent', 'price': 18.0, 'colors': ['white', 'pink', 'purple'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_033', 'title': 'Vintage Band Tee — Faded Grey', 'description': 'Faded grey band-style tee with distressed graphic. Crew neck. Fits boxy. Well-loved but no holes or major damage.', 'category': 'tops', 'style_tags': ['vintage', 'grunge', 'band tee', 'graphic tee', 'streetwear'], 'size': 'L', 'condition': 'fair', 'price': 19.0, 'colors': ['grey', 'charcoal'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_015', 'title': 'Vintage Graphic Hoodie — Faded Black', 'description': 'Faded black pullover hoodie with barely-visible vintage graphic on the chest. Cozy interior. Some pilling but adds to the worn-in look.', 'category': 'tops', 'style_tags': ['vintage', 'grunge', 'graphic', 'streetwear'], 'size': 'L', 'condition': 'fair', 'price': 26.0, 'colors': ['black', 'charcoal'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_017', 'title': 'Mesh Long-Sleeve Top — Black', 'description': 'Sheer black mesh long-sleeve. Great for layering under a graphic tee or over a bralette. Stretchy material, fits true to size.', 'category': 'tops', 'style_tags': ['y2k', 'grunge', 'goth', 'layering'], 'size': 'S/M', 'condition': 'excellent', 'price': 15.0, 'colors': ['black'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_012', 'title': 'Oversized Crewneck Sweatshirt — Vintage Navy', 'description': 'Perfectly faded navy crewneck. Genuinely vintage — not manufactured distressed. Ribbed cuffs and hem. No graphics, clean.', 'category': 'tops', 'style_tags': ['vintage', 'basics', 'oversized', 'classic'], 'size': 'XL (fits oversized)', 'condition': 'good', 'price': 20.0, 'colors': ['navy'], 'brand': None, 'platform': 'thredUp'}, {'id': 'lst_011', 'title': 'Low-Rise Cargo Pants — Khaki', 'description': 'Y2K era low-rise cargo pants. Lots of pockets. Khaki color, slightly distressed at the hems. Great for layering with a long tee.', 'category': 'bottoms', 'style_tags': ['y2k', 'cargo', '2000s', 'streetwear'], 'size': 'W29', 'condition': 'fair', 'price': 27.0, 'colors': ['khaki', 'tan'], 'brand': None, 'platform': 'poshmark'}]
 
+$ python -c "from tools import search_listings; print(search_listings('designer ballgown', size='XXS', max_price=5))"
+[]
 ```
 
 ```
-$ python -c "from tools import suggest_outfit; ..."
+$ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[5], get_example_wardrobe()))"
+Outfit 1: Graphic Tee — 2003 Tour Bootleg Style + Baggy straight-leg jeans, dark wash + Black combat boots
+Why it works: Leans fully into the grunge aesthetic with matching dark tones and relaxed silhouettes.
 
+Outfit 2: Graphic Tee — 2003 Tour Bootleg Style + Wide-leg khaki trousers + Chunky white sneakers
+Why it works: The boxy black tee grounds the earthy trousers, creating an easy streetwear balance.
+
+$ python -c "from tools import suggest_outfit; from utils.data_loader import get_empty_wardrobe, load_listings; print(suggest_outfit(load_listings()[5], get_empty_wardrobe()))"
+General ideas:
+
+Outfit 1:
+Pieces: Oversized black tee, light-wash straight-leg jeans, beat-up white canvas sneakers, silver chain necklace.
+Why it works: The light denim cuts the darkness of the top and keeps the grunge look effortless.
+
+Outfit 2:
+Pieces: Black tee tucked into olive green cargo pants, black combat boots, a canvas crossbody bag.
+Why it works: It leans into the streetwear aesthetic with utilitarian textures that match the boxy cut.
 ```
 
-```
-$ python -c "from tools import create_fit_card; ..."
+Three runs with the cache off (`AI201_CACHE=0`) on the same item, to check
+the cards really vary:
 
+```
+$ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('baggy dark-wash jeans, chunky white sneakers and a black denim jacket', load_listings()[5]))"
+Scored this 2003 tour graphic tee on depop for $24 and it's already my favorite shirt. The boxy fit gives off the best grunge streetwear energy, especially paired with my chunky white sneakers. #thrifted #depopfinds #vintagestyle
+---
+Scored this vintage-style tour graphic tee on depop for $24 and I'm obsessed with the grunge vibe. The cotton is super soft and worn-in. Throwing it on with chunky white sneakers for the easiest everyday fit. 
+
+#depopfinds #graphictee #streetwear
+---
+Scored this vintage-style tour graphic tee on depop for just $24 and I'm obsessed with the grunge vibe. The worn-in cotton feels amazing and it has the best boxy fit. Throwing it on with my chunky white sneakers and calling it a day. 
+
+#thrifted #graphictree #depopfinds
+---
+
+$ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('   ', load_listings()[0]))"
+Can't write a fit card: no outfit suggestion was given for Vintage Levi's 501 Jeans — Medium Wash.
 ```
 
 ---
@@ -203,15 +281,31 @@ $ python -c "from tools import create_fit_card; ..."
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* Claude Code wrote `create_fit_card` from my spec, and I
+  had it run the tool three times on the same item with the cache off to check
+  the cards vary.
+- *What came back:* three different captions, each with `$24` and `depop` in
+  them, but every one was written as the **seller**: "Grab it on depop for $24
+  before I change my mind." The prompt said "a post about this thrift find",
+  and the model took that as a sales listing.
+- *What I changed:* the system prompt now says the caption is from the person
+  who just bought the item, not the seller, and that it should never tell
+  readers to buy it. The platform is now mentioned "as where they found it".
+  The re-run cards read "Scored this 2003 tour graphic tee on depop for $24…".
+  <!-- TODO: put this in your own words -->
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* a message for the empty-search branch that tells the
+  user what to change, not just "No results".
+- *What came back:* the first version only told the user to try different
+  words. For `'designer ballgown size XXS under $5'` that's half the story,
+  because nothing in the data costs $5 (the cheapest listing is $12), so
+  changing the words alone would still find nothing.
+- *What I changed:* the message now re-runs the search without the size, then
+  without the price, and says which filter is the problem. When the words
+  match nothing, it also says if the price is below the cheapest listing.
+  <!-- TODO: put this in your own words, and add anything you changed -->
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
